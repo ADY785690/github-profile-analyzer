@@ -1,16 +1,17 @@
 import streamlit as st
 import pandas as pd
 import requests
+import plotly.express as px
 
 st.set_page_config(
-    page_title="AI GitHub Developer Intelligence Platform",
+    page_title="GitHub Developer Intelligence Platform",
     layout="wide"
 )
 
-st.title("🚀 AI GitHub Developer Intelligence Platform")
+st.title("🚀 GitHub Developer Intelligence Platform")
 
 st.markdown(
-    "Analyze GitHub profiles, developer strength, recruiter readiness and portfolio quality."
+    "Analyze GitHub profiles, recruiter readiness, portfolio quality and career opportunities."
 )
 
 username = st.text_input(
@@ -21,214 +22,283 @@ username = st.text_input(
 if st.button("Analyze Profile"):
 
     profile_url = f"https://api.github.com/users/{username}"
-    profile = requests.get(profile_url)
 
-    if profile.status_code != 200:
+    response = requests.get(profile_url)
+
+    if response.status_code != 200:
         st.error("GitHub User Not Found")
-    else:
+        st.stop()
 
-        user = profile.json()
+    user = response.json()
 
-        followers = user["followers"]
-        following = user["following"]
-        repos = user["public_repos"]
-        bio = user.get("bio", "No Bio")
-        location = user.get("location", "Not Available")
-        created = user["created_at"][:10]
+    followers = user.get("followers", 0)
+    following = user.get("following", 0)
+    repos = user.get("public_repos", 0)
+    bio = user.get("bio") or "No Bio Available"
+    location = user.get("location") or "Not Available"
+    created = user.get("created_at", "")[:10]
 
-        score = min(
-            repos * 3 +
-            followers * 2 +
-            20,
-            100
+    repos_url = f"https://api.github.com/users/{username}/repos"
+    repos_response = requests.get(repos_url)
+
+    repos_data = repos_response.json()
+
+    repo_names = []
+    stars = []
+    forks = []
+    languages = {}
+
+    for repo in repos_data:
+
+        repo_names.append(repo["name"])
+
+        stars.append(
+            repo.get("stargazers_count", 0)
         )
 
-        if score >= 80:
-            level = "Professional"
-        elif score >= 60:
-            level = "Advanced"
-        elif score >= 40:
-            level = "Intermediate"
-        else:
-            level = "Beginner"
+        forks.append(
+            repo.get("forks_count", 0)
+        )
 
-        col1, col2, col3, col4 = st.columns(4)
+        lang = repo.get("language")
 
-        col1.metric("Followers", followers)
-        col2.metric("Repositories", repos)
-        col3.metric("Developer Score", score)
-        col4.metric("Profile Level", level)
-
-        st.divider()
-
-        st.subheader("👤 Profile Details")
-
-        st.write("**Username:**", username)
-        st.write("**Bio:**", bio)
-        st.write("**Location:**", location)
-        st.write("**Following:**", following)
-        st.write("**Account Created:**", created)
-
-        st.divider()
-
-        repos_url = f"https://api.github.com/users/{username}/repos"
-        repos_data = requests.get(repos_url).json()
-
-        repo_names = []
-        stars = []
-        forks = []
-        languages = {}
-
-        for repo in repos_data:
-
-            repo_names.append(repo["name"])
-            stars.append(repo["stargazers_count"])
-            forks.append(repo["forks_count"])
-
-            lang = repo["language"]
-
-            if lang:
-                languages[lang] = languages.get(lang, 0) + 1
-
-        st.subheader("📁 Repository Analysis")
-
-        repo_df = pd.DataFrame({
-            "Repository": repo_names,
-            "Stars": stars,
-            "Forks": forks
-        })
-
-        st.dataframe(repo_df)
-
-        st.divider()
-
-        st.subheader("⭐ Project Quality Metrics")
-
-        total_stars = sum(stars)
-        total_forks = sum(forks)
-
-        c1, c2, c3 = st.columns(3)
-
-        c1.metric("Total Stars", total_stars)
-        c2.metric("Total Forks", total_forks)
-        c3.metric("Public Projects", repos)
-
-        st.divider()
-
-        st.subheader("💻 Language Distribution")
-
-        if languages:
-
-            lang_df = pd.DataFrame({
-                "Language": languages.keys(),
-                "Projects": languages.values()
-            })
-
-            st.bar_chart(
-                lang_df.set_index("Language")
+        if lang:
+            languages[lang] = (
+                languages.get(lang, 0) + 1
             )
 
-        st.divider()
+    total_stars = sum(stars)
+    total_forks = sum(forks)
 
-        st.subheader("🎯 Recruiter Readiness")
+    developer_score = min(
+        (
+            repos * 4
+            + followers * 2
+            + min(total_stars, 20)
+            + 20
+        ),
+        100
+    )
 
-        readiness = min(
-            repos * 5 +
-            followers +
-            20,
-            100
-        )
+    recruiter_score = min(
+        (
+            repos * 5
+            + followers * 2
+            + min(total_stars, 20)
+            + 20
+        ),
+        100
+    )
 
-        st.progress(readiness / 100)
+    quality_score = min(
+        (
+            repos * 4
+            + total_stars * 2
+            + total_forks
+        ),
+        100
+    )
 
-        st.success(
-            f"Recruiter Readiness Score: {readiness}%"
-        )
+    if developer_score >= 80:
+        level = "Professional"
+    elif developer_score >= 60:
+        level = "Advanced"
+    elif developer_score >= 40:
+        level = "Intermediate"
+    else:
+        level = "Beginner"
 
-        st.divider()
+    st.subheader("📊 Developer Dashboard")
 
-        st.subheader("📋 Portfolio Health Check")
+    col1, col2, col3, col4 = st.columns(4)
 
-        checks = []
+    col1.metric(
+        "Developer Score",
+        f"{developer_score}/100"
+    )
 
-        if repos >= 5:
-            checks.append("✅ Good Number of Projects")
-        else:
-            checks.append("❌ Add More Projects")
+    col2.metric(
+        "Recruiter Readiness",
+        f"{recruiter_score}%"
+    )
 
-        if followers >= 10:
-            checks.append("✅ Community Presence")
-        else:
-            checks.append("❌ Increase GitHub Activity")
+    col3.metric(
+        "Repository Quality",
+        f"{quality_score}/100"
+    )
 
-        if bio != "No Bio":
-            checks.append("✅ Bio Available")
-        else:
-            checks.append("❌ Add Professional Bio")
+    col4.metric(
+        "Level",
+        level
+    )
 
-        for item in checks:
-            st.write(item)
+    st.divider()
 
-        st.divider()
+    st.subheader("👤 Profile Information")
 
-        st.subheader("🚀 Career Recommendations")
+    st.write(f"**Username:** {username}")
+    st.write(f"**Bio:** {bio}")
+    st.write(f"**Location:** {location}")
+    st.write(f"**Followers:** {followers}")
+    st.write(f"**Following:** {following}")
+    st.write(f"**Public Repositories:** {repos}")
+    st.write(f"**Account Created:** {created}")
 
-        careers = []
+    st.divider()
 
-        if "Python" in languages:
-            careers.append("ML Engineer")
-            careers.append("Data Analyst")
+    st.subheader("💻 Language Intelligence")
 
-        if "JavaScript" in languages:
-            careers.append("Frontend Developer")
+    if languages:
 
-        if "Java" in languages:
-            careers.append("Software Engineer")
-
-        if not careers:
-            careers.append("Software Engineer")
-
-        for career in careers:
-            st.success(career)
-
-        st.divider()
-
-        st.subheader("📈 Improvement Suggestions")
-
-        suggestions = [
-            "Add detailed README files",
-            "Deploy more projects",
-            "Increase GitHub activity",
-            "Build AI/Data Science projects",
-            "Add project documentation"
-        ]
-
-        for s in suggestions:
-            st.write("•", s)
-
-        report = pd.DataFrame({
-            "Metric": [
-                "Developer Score",
-                "Recruiter Readiness",
-                "Repositories",
-                "Followers"
-            ],
-            "Value": [
-                score,
-                readiness,
-                repos,
-                followers
-            ]
+        lang_df = pd.DataFrame({
+            "Language": list(languages.keys()),
+            "Projects": list(languages.values())
         })
 
-        csv = report.to_csv(index=False)
-
-        st.download_button(
-            label="📥 Download Report",
-            data=csv,
-            file_name="github_analysis_report.csv",
-            mime="text/csv"
+        fig = px.pie(
+            lang_df,
+            names="Language",
+            values="Projects",
+            title="Language Distribution"
         )
 
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+    st.divider()
+
+    st.subheader("📁 Repository Analysis")
+
+    repo_df = pd.DataFrame({
+        "Repository": repo_names,
+        "Stars": stars,
+        "Forks": forks
+    })
+
+    st.dataframe(repo_df)
+
+    st.divider()
+
+    st.subheader("🥇 Top Repositories")
+
+    top_projects = repo_df.sort_values(
+        by="Stars",
+        ascending=False
+    ).head(5)
+
+    st.dataframe(top_projects)
+
+    st.divider()
+
+    st.subheader("🩺 Portfolio Health Check")
+
+    checks = []
+
+    if repos >= 5:
+        checks.append("✅ Good number of projects")
+    else:
+        checks.append("❌ Add more projects")
+
+    if bio != "No Bio Available":
+        checks.append("✅ Professional bio present")
+    else:
+        checks.append("❌ Add GitHub bio")
+
+    if total_stars > 0:
+        checks.append("✅ Community engagement present")
+    else:
+        checks.append("❌ Increase project visibility")
+
+    for item in checks:
+        st.write(item)
+
+    st.divider()
+
+    st.subheader("🚀 Career Recommendation Engine")
+
+    career_scores = {
+        "Data Analyst": 0,
+        "ML Engineer": 0,
+        "Software Engineer": 0,
+        "Data Engineer": 0
+    }
+
+    if "Python" in languages:
+        career_scores["ML Engineer"] += 30
+        career_scores["Data Analyst"] += 25
+        career_scores["Data Engineer"] += 20
+
+    if "JavaScript" in languages:
+        career_scores["Software Engineer"] += 30
+
+    if "Java" in languages:
+        career_scores["Software Engineer"] += 25
+
+    if repos > 5:
+        for role in career_scores:
+            career_scores[role] += 20
+
+    career_df = pd.DataFrame({
+        "Role": list(career_scores.keys()),
+        "Score": list(career_scores.values())
+    })
+
+    career_chart = px.bar(
+        career_df,
+        x="Role",
+        y="Score",
+        title="Career Match Analysis"
+    )
+
+    st.plotly_chart(
+        career_chart,
+        use_container_width=True
+    )
+
+    st.divider()
+
+    st.subheader("📈 Improvement Suggestions")
+
+    suggestions = [
+        "Add deployed projects",
+        "Improve README documentation",
+        "Increase GitHub activity",
+        "Build more AI/Data projects",
+        "Add project screenshots"
+    ]
+
+    for s in suggestions:
+        st.write("•", s)
+
+    report = pd.DataFrame({
+        "Metric": [
+            "Developer Score",
+            "Recruiter Readiness",
+            "Repository Quality",
+            "Repositories",
+            "Followers"
+        ],
+        "Value": [
+            developer_score,
+            recruiter_score,
+            quality_score,
+            repos,
+            followers
+        ]
+    })
+
+    csv = report.to_csv(index=False)
+
+    st.download_button(
+        label="📥 Download Analysis Report",
+        data=csv,
+        file_name="github_developer_report.csv",
+        mime="text/csv"
+    )
+
 else:
-    st.info("Enter GitHub username and click Analyze Profile")
+    st.info(
+        "Enter a GitHub username and click Analyze Profile"
+    )
