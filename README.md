@@ -317,8 +317,7 @@ github-developer-intelligence-platform
 ---
 
 ## 👨‍💻 Author
-
-**Aditya Sharma**
+Aditya Sharma
 
 B.Tech CSE (Data Science)
 
@@ -330,6 +329,4 @@ Interests:
 - AI Systems
 - Business Intelligence
 
----
 
-## ⭐ If you found this project useful, consider giving it a star.
